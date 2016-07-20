@@ -1,13 +1,17 @@
 -module(aws_client).
 
--export([make_client/3, make_temporary_client/4,
-	 make_local_client/3]).
+-export([make_client/3,
+  make_client/5,
+  make_temporary_client/4,
+  make_local_client/3]).
 
 -type access_key_id() :: binary().
 -type secret_access_key() :: binary().
 -type region() :: binary().
+-type endpoint() :: binary().
 -type token() :: binary().
 -type http_port() :: binary().
+-type proto() :: binary().
 -type aws_client() :: map().
 -export_type([access_key_id/0, secret_access_key/0, region/0,
               token/0, aws_client/0]).
@@ -20,11 +24,18 @@
     aws_client().
 make_client(AccessKeyID, SecretAccessKey, Region)
   when is_binary(AccessKeyID), is_binary(SecretAccessKey), is_binary(Region) ->
-    #{access_key_id => AccessKeyID,
+  make_client(AccessKeyID, SecretAccessKey, Region, <<"amazonaws.com">>, <<"https">>).
+
+
+-spec make_client(access_key_id(), secret_access_key(), region(), endpoint(), proto()) ->
+  aws_client().
+make_client(AccessKeyID, SecretAccessKey, Region, Endpoint, Proto)
+  when is_binary(AccessKeyID), is_binary(SecretAccessKey), is_binary(Region), is_binary(Endpoint), is_binary(Proto) ->
+  #{access_key_id => AccessKeyID,
       secret_access_key => SecretAccessKey,
       region => Region,
-      endpoint => <<"amazonaws.com">>,
-      proto => <<"https">>,
+      endpoint => Endpoint,
+      proto => Proto,
       port => <<"443">>,
       service => undefined}.
 
