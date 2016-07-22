@@ -4,41 +4,43 @@
 
 -include_lib("hackney/include/hackney_lib.hrl").
 
+
 %%====================================================================
 %% API
 %%====================================================================
 
 %% Generate headers with an AWS signature version 4 for the specified
 %% request.
-sign_request(Client, Method, URL, Headers, Body) ->
+sign_request(Client, Method, URL, Headers, HashToken) ->
     AccessKeyID = maps:get(access_key_id, Client),
     SecretAccessKey = maps:get(secret_access_key, Client),
     Region = maps:get(region, Client),
     Service = maps:get(service, Client),
     Token = maps:get(token, Client, undefined),
     sign_request(AccessKeyID, SecretAccessKey, Region, Service, Token,
-                 Method, URL,Headers, Body).
+                 Method, URL,Headers, HashToken).
 
 %% Generate headers with an AWS signature version 4 for the specified
 %% request.
 sign_request(AccessKeyID, SecretAccessKey, Region, Service, Token,
-             Method, URL, Headers, Body) ->
+             Method, URL, Headers, HashToken) ->
     sign_request(AccessKeyID, SecretAccessKey, Region, Service, Token,
-                 calendar:universal_time(), Method, URL, Headers, Body).
+                 calendar:universal_time(), Method, URL, Headers, HashToken).
 
 %% Generate headers with an AWS signature version 4 for the specified
 %% request using the specified time when generating signatures.
 sign_request(AccessKeyID, SecretAccessKey, Region, Service, Token, Now,
-             Method, URL, Headers, Body) ->
+             Method, URL, Headers, HashToken) ->
     LongDate = list_to_binary(ec_date:format("YmdTHisZ", Now)),
     ShortDate = list_to_binary(ec_date:format("Ymd", Now)),
-    Headers1 = add_date_header(Headers, LongDate),
-    CanonicalRequest = canonical_request(Method, URL, Headers1, Body),
+    Head = add_amz_content(Headers, HashToken),
+    Headers1 = add_date_header(Head, LongDate),
+    CanonicalRequest = canonical_request(Method, URL, Headers1, HashToken),
     HashedCanonicalRequest = aws_util:sha256_hexdigest(CanonicalRequest),
     CredentialScope = credential_scope(ShortDate, Region, Service),
     SigningKey = signing_key(SecretAccessKey, ShortDate, Region, Service),
     StringToSign = string_to_sign(LongDate, CredentialScope,
-                                  HashedCanonicalRequest),
+                                   HashedCanonicalRequest),
     Signature = aws_util:hmac_sha256_hexdigest(SigningKey, StringToSign),
     SignedHeaders = signed_headers(Headers1),
     Authorization = authorization(AccessKeyID, CredentialScope, SignedHeaders,
@@ -59,6 +61,11 @@ add_authorization_header(Headers, Authorization) ->
 %% to a list of headers.
 add_date_header(Headers, Date) ->
     [{<<"X-Amz-Date">>, Date}|Headers].
+
+%% Add an X-Amz-Content-Sha256 header with the payload hash
+
+add_amz_content(Headers, Key) ->
+    [{<<"X-Amz-Content-Sha256">>, Key}|Headers].
 
 %% Add an X-Amz-Security-Token header with the user-submitted security token
 %% to a list of headers
@@ -99,11 +106,10 @@ string_to_sign(LongDate, CredentialScope, HashedCanonicalRequest) ->
 
 %% Process and merge request values into a canonical request for AWS
 %% signature version 4.
-canonical_request(Method, URL, Headers, Body) ->
+canonical_request(Method, URL, Headers, PayloadHash) ->
     {CanonicalURL, CanonicalQueryString} = split_url(URL),
     CanonicalHeaders = canonical_headers(Headers),
     SignedHeaders = signed_headers(Headers),
-    PayloadHash = aws_util:sha256_hexdigest(Body),
     aws_util:binary_join([Method, CanonicalURL, CanonicalQueryString,
                           CanonicalHeaders, SignedHeaders, PayloadHash],
                          <<"\n">>).

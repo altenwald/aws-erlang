@@ -40,13 +40,19 @@
          remove_tags_from_stream/2,
          remove_tags_from_stream/3,
          split_shard/2,
-         split_shard/3]).
+         split_shard/3,
+         vega_sign/3]).
 
 -include_lib("hackney/include/hackney_lib.hrl").
+
 
 %%====================================================================
 %% API
 %%====================================================================
+
+
+vega_sign(Client, Signature, Method) ->
+  request_vega(Client, <<"s3">>, Signature, Method).
 
 %% @doc Adds or updates tags for the specified Amazon Kinesis stream. Each
 %% stream can have up to 10 tags.
@@ -660,6 +666,16 @@ request(Client, Action, Input, Options) ->
     Response = hackney:request(post, URL, Headers1, Payload, Options),
     handle_response(Response).
 
+  request_vega(Client, Action, HashToken, Method) ->
+    Client1 = Client#{service => Action},
+    Host = get_vega_host(<<"">>, Client1),
+    URL = get_vega_url(Host, Client1),
+    [SHost, _] = binary:split(Host, <<"/">>),
+    Headers = [{<<"Host">>, SHost},
+    {<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}],
+    aws_request:sign_request(Client1, Method, URL, Headers, HashToken).
+
+
 handle_response({ok, 200, ResponseHeaders, Client}) ->
     case hackney:body(Client) of
         {ok, <<>>} ->
@@ -679,16 +695,24 @@ handle_response({error, Reason}) ->
 
 get_host(_EndpointPrefix, #{region := <<"local">>}) ->
     <<"localhost">>;
+
 get_host(EndpointPrefix, #{region := Region, endpoint := Endpoint}) ->
     aws_util:binary_join([EndpointPrefix,
-			  <<".">>,
-			  Region,
-			  <<".">>,
-			  Endpoint],
-			 <<"">>).
+                         <<".">>,
+                         Region,
+                         <<".">>,
+                         Endpoint],
+                        <<"">>).
+
+get_vega_host(EndpointPrefix, #{endpoint := Endpoint}) ->
+  aws_util:binary_join([EndpointPrefix, Endpoint], <<"">>).
 
 get_url(Host, Client) ->
     Proto = maps:get(proto, Client),
     Port = maps:get(port, Client),
     aws_util:binary_join([Proto, <<"://">>, Host, <<":">>, Port, <<"/">>],
-			 <<"">>).
+        <<"">>).
+
+get_vega_url(Host, Client) ->
+  Proto = maps:get(proto, Client),
+  aws_util:binary_join([Proto, <<"://">>, Host],<<"">>).

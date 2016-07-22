@@ -36,7 +36,7 @@ make_client(AccessKeyID, SecretAccessKey, Region, Endpoint, Proto)
       region => Region,
       endpoint => Endpoint,
       proto => Proto,
-      port => <<"443">>,
+      port => <<"80">>,
       service => undefined}.
 
 -spec make_temporary_client(access_key_id(), secret_access_key(), token(), region()) ->
