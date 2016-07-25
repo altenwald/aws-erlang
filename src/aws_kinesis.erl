@@ -672,7 +672,7 @@ request(Client, Action, Input, Options) ->
     URL = get_vega_url(Host, Client1),
     [SHost, _] = binary:split(Host, <<"/">>),
     Headers = [{<<"Host">>, SHost},
-    {<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}],
+    {<<"Content-Type">>, <<"application/octet-stream">>}],
     aws_request:sign_request(Client1, Method, URL, Headers, HashToken).
 
 
