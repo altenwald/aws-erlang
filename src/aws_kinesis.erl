@@ -11,6 +11,8 @@
          add_tags_to_stream/3,
          create_stream/2,
          create_stream/3,
+         copy_object/3,
+         delete_object/2,
          decrease_stream_retention_period/2,
          decrease_stream_retention_period/3,
          delete_stream/2,
@@ -46,6 +48,7 @@
 -include_lib("hackney/include/hackney_lib.hrl").
 
 
+
 %%====================================================================
 %% API
 %%====================================================================
@@ -53,6 +56,12 @@
 
 vega_sign(Client, Signature, Method) ->
   request_vega(Client, <<"s3">>, Signature, Method).
+
+copy_object(Client, Source, Method) ->
+  request_copy(Client, <<"s3">>, Source, Method).
+
+delete_object(Client, Method) ->
+  request_delete(Client, <<"s3">>, Method).
 
 %% @doc Adds or updates tags for the specified Amazon Kinesis stream. Each
 %% stream can have up to 10 tags.
@@ -666,7 +675,7 @@ request(Client, Action, Input, Options) ->
     Response = hackney:request(post, URL, Headers1, Payload, Options),
     handle_response(Response).
 
-  request_vega(Client, Action, HashToken, Method) ->
+request_vega(Client, Action, HashToken, Method) ->
     Client1 = Client#{service => Action},
     Host = get_vega_host(<<"">>, Client1),
     URL = get_vega_url(Host, Client1),
@@ -674,6 +683,26 @@ request(Client, Action, Input, Options) ->
     Headers = [{<<"Host">>, SHost},
     {<<"Content-Type">>, <<"application/octet-stream">>}],
     aws_request:sign_request(Client1, Method, URL, Headers, HashToken).
+
+request_copy(Client, Action, Source, Method) ->
+    Client1 = Client#{service => Action},
+    Host = get_vega_host(<<"">>, Client1),
+    URL = get_vega_url(Host, Client1),
+    [SHost, _] = binary:split(Host, <<"/">>),
+    Headers = [{<<"Host">>, SHost}],
+    Headers1 = aws_request:sign_request_copy(Client1, Method, URL, Source, Headers),
+    Response = hackney:request(put, URL, Headers1, [], []),
+    handle_response(Response).
+
+
+request_delete(Client, Action, Method) ->
+  Client1 = Client#{service => Action},
+  Host = get_vega_host(<<"">>, Client1),
+  URL = get_vega_url(Host, Client1),
+  [SHost, _] = binary:split(Host, <<"/">>),
+  Headers = [{<<"Host">>, SHost}, {<<"Content-Type">>, <<"text/plain">>}],
+  Headers1 = aws_request:sign_request_delete(Client1, Method, URL, Headers),
+  hackney:request(delete, URL, Headers1, [], []).
 
 
 handle_response({ok, 200, ResponseHeaders, Client}) ->
@@ -685,11 +714,12 @@ handle_response({ok, 200, ResponseHeaders, Client}) ->
             {ok, Result, {200, ResponseHeaders, Client}}
     end;
 handle_response({ok, StatusCode, ResponseHeaders, Client}) ->
-    {ok, Body} = hackney:body(Client),
-    Error = jsx:decode(Body, [return_maps]),
-    Exception = maps:get(<<"__type">>, Error, undefined),
-    Reason = maps:get(<<"message">>, Error, undefined),
-    {error, {Exception, Reason}, {StatusCode, ResponseHeaders, Client}};
+    %{ok, Body} = hackney:body(Client),
+    % Error = jsx:decode(Body, [return_maps]),
+    % Exception = maps:get(<<"__type">>, Error, undefined),
+    % Reason = maps:get(<<"message">>, Error, undefined),
+    %{error, {Exception, Reason}, {StatusCode, ResponseHeaders, Client}};
+    {error, {<<"error">>, <<"error">>}, {StatusCode, ResponseHeaders, Client}};
 handle_response({error, Reason}) ->
     {error, Reason}.
 

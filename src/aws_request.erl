@@ -1,9 +1,10 @@
 -module(aws_request).
 
--export([sign_request/5]).
+-export([sign_request/5, sign_request_copy/5, sign_request_delete/4]).
 
 -include_lib("hackney/include/hackney_lib.hrl").
 
+-define(EMPTY_HASH, <<"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855">>).
 
 %%====================================================================
 %% API
@@ -48,6 +49,64 @@ sign_request(AccessKeyID, SecretAccessKey, Region, Service, Token, Now,
     Headers2 = add_authorization_header(Headers1, Authorization),
     maybe_add_token_header(Headers2, Token).
 
+sign_request_copy(Client, Method, URL, Source, Headers) ->
+    AccessKeyID = maps:get(access_key_id, Client),
+    SecretAccessKey = maps:get(secret_access_key, Client),
+    Region = maps:get(region, Client),
+    Service = maps:get(service, Client),
+    Token = maps:get(token, Client, undefined),
+    sign_request_copy(AccessKeyID, SecretAccessKey, Method, URL, Region, Service, Token,
+      calendar:universal_time(), Source, Headers).
+
+sign_request_copy(AccessKeyID, SecretAccessKey, Method, URL, Region, Service, _Token,
+                 Now, Source, Headers) ->
+    ShortDate = list_to_binary(ec_date:format("Ymd", Now)),
+    LongDate = list_to_binary(ec_date:format("YmdTHisZ", Now)),
+
+    Head1 = add_copy_header(Headers, Source),
+    Head2 = add_read_permision(Head1),
+    Headers1 = add_date_header(Head2, LongDate),
+    CanonicalRequest = canonical_request(Method, URL, Headers1, ?EMPTY_HASH),
+    HashedCanonicalRequest = aws_util:sha256_hexdigest(CanonicalRequest),
+    CredentialScope = credential_scope(ShortDate, Region, Service),
+    SigningKey = signing_key(SecretAccessKey, ShortDate, Region, Service),
+    StringToSign = string_to_sign(LongDate, CredentialScope,
+                                   HashedCanonicalRequest),
+    Signature = aws_util:hmac_sha256_hexdigest(SigningKey, StringToSign),
+    SignedHeaders = signed_headers(Headers1),
+    Authorization = authorization(AccessKeyID, CredentialScope, SignedHeaders,
+                                  Signature),
+    add_authorization_header(Headers1, Authorization).
+
+
+sign_request_delete(Client, Method, URL, Headers) ->
+    AccessKeyID = maps:get(access_key_id, Client),
+    SecretAccessKey = maps:get(secret_access_key, Client),
+    Region = maps:get(region, Client),
+    Service = maps:get(service, Client),
+    Token = maps:get(token, Client, undefined),
+    sign_request_delete(AccessKeyID, SecretAccessKey, Method, URL, Region, Service, Token,
+      calendar:universal_time(), Headers).
+
+sign_request_delete(AccessKeyID, SecretAccessKey, Method, URL, Region, Service, _Token,
+                 Now, Headers) ->
+    ShortDate = list_to_binary(ec_date:format("Ymd", Now)),
+    LongDate = list_to_binary(ec_date:format("YmdTHisZ", Now)),
+    Headers1 = add_date_header(Headers, LongDate),
+    CanonicalRequest = canonical_request(Method, URL, Headers1, ?EMPTY_HASH),
+    HashedCanonicalRequest = aws_util:sha256_hexdigest(CanonicalRequest),
+    CredentialScope = credential_scope(ShortDate, Region, Service),
+    SigningKey = signing_key(SecretAccessKey, ShortDate, Region, Service),
+    StringToSign = string_to_sign(LongDate, CredentialScope,
+                                   HashedCanonicalRequest),
+    Signature = aws_util:hmac_sha256_hexdigest(SigningKey, StringToSign),
+    SignedHeaders = signed_headers(Headers1),
+    Authorization = authorization(AccessKeyID, CredentialScope, SignedHeaders,
+                                  Signature),
+    add_authorization_header(Headers1, Authorization).
+
+
+
 %%====================================================================
 %% Internal functions
 %%====================================================================
@@ -61,6 +120,14 @@ add_authorization_header(Headers, Authorization) ->
 %% to a list of headers.
 add_date_header(Headers, Date) ->
     [{<<"X-Amz-Date">>, Date}|Headers].
+
+
+add_copy_header(Headers, Key) ->
+    [{<<"X-Amz-Copy-Source">>, Key}|Headers].
+
+add_read_permision(Headers) ->
+  [{<<"X-Amz-Acl">>, <<"public-read">>}|Headers].
+
 
 %% Add an X-Amz-Content-Sha256 header with the payload hash
 
