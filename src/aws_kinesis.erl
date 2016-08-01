@@ -681,7 +681,7 @@ request_vega(Client, Action, HashToken, Method) ->
     URL = get_vega_url(Host, Client1),
     [SHost, _] = binary:split(Host, <<"/">>),
     Headers = [{<<"Host">>, SHost},
-    {<<"Content-Type">>, <<"application/octet-stream">>}],
+    {<<"Content-Type">>, <<"image/jpeg">>}],
     aws_request:sign_request(Client1, Method, URL, Headers, HashToken).
 
 request_copy(Client, Action, Source, Method) ->
