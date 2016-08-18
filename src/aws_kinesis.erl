@@ -43,7 +43,7 @@
          remove_tags_from_stream/3,
          split_shard/2,
          split_shard/3,
-         vega_sign/3]).
+         vega_sign/4]).
 
 -include_lib("hackney/include/hackney_lib.hrl").
 
@@ -54,8 +54,8 @@
 %%====================================================================
 
 
-vega_sign(Client, Signature, Method) ->
-  request_vega(Client, <<"s3">>, Signature, Method).
+vega_sign(Client, Signature, Method, ContentType) ->
+  request_vega(Client, <<"s3">>, Signature, Method, ContentType).
 
 copy_object(Client, Source, Method) ->
   request_copy(Client, <<"s3">>, Source, Method).
@@ -675,13 +675,13 @@ request(Client, Action, Input, Options) ->
     Response = hackney:request(post, URL, Headers1, Payload, Options),
     handle_response(Response).
 
-request_vega(Client, Action, HashToken, Method) ->
+request_vega(Client, Action, HashToken, Method, ContentType) ->
     Client1 = Client#{service => Action},
     Host = get_vega_host(<<"">>, Client1),
     URL = get_vega_url(Host, Client1),
     [SHost, _] = binary:split(Host, <<"/">>),
     Headers = [{<<"Host">>, SHost},
-    {<<"Content-Type">>, <<"image/jpeg">>}],
+    {<<"Content-Type">>, ContentType}],
     aws_request:sign_request(Client1, Method, URL, Headers, HashToken).
 
 request_copy(Client, Action, Source, Method) ->
